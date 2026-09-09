@@ -124,18 +124,24 @@ async def websocket_alerts_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         ws_manager.disconnect_alerts(websocket)
 
+from fastapi import Request
+
 @app.get("/")
 @app.get("/api")
 @app.get("/api/")
 @app.get("/api/index.py")
-def root():
+def root(request: Request):
     return {
         "platform": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "OPERATIONAL",
         "demo_mode": settings.DEMO_MODE,
-        "docs_url": "/docs"
+        "docs_url": "/docs",
+        "debug_path": request.scope.get("path"),
+        "debug_raw_path": str(request.scope.get("raw_path")),
+        "debug_headers": dict(request.headers)
     }
+
 
 if __name__ == "__main__":
     import uvicorn
