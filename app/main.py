@@ -17,14 +17,35 @@ from app.services.evidence_service import EvidenceService
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Ensure tables, stock evidence, and start simulation loop
-    Base.metadata.create_all(bind=engine)
-    EvidenceService.create_stock_evidence()
-    simulation_engine.start()
-    print("[BusSense AI] Backend initialized. Simulation engine running.")
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print("[Startup warning - db tables]:", e)
+
+    try:
+        EvidenceService.create_stock_evidence()
+    except Exception as e:
+        print("[Startup warning - stock evidence]:", e)
+
+    if not os.getenv("VERCEL"):
+        try:
+            simulation_engine.start()
+            print("[BusSense AI] Backend initialized. Simulation engine running.")
+        except Exception as e:
+            print("[Startup warning - simulation engine]:", e)
+    else:
+        print("[BusSense AI] Backend initialized in Vercel Serverless mode.")
+
     yield
+
     # Shutdown
-    simulation_engine.pause()
-    print("[BusSense AI] Shutting down simulation engine.")
+    if not os.getenv("VERCEL"):
+        try:
+            simulation_engine.pause()
+            print("[BusSense AI] Shutting down simulation engine.")
+        except Exception:
+            pass
+
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
