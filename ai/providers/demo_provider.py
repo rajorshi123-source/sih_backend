@@ -54,6 +54,7 @@ class DemoAIProvider:
         tracked = []
         for idx, det in enumerate(detections):
             d = dict(det)
-            d["track_id"] = f"TRK-{100 + idx}"
+            d["track_id"] = 100 + idx
             tracked.append(d)
         return tracked
+
