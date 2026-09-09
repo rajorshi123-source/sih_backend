@@ -69,18 +69,41 @@ app.mount("/evidence", StaticFiles(directory=settings.EVIDENCE_DIR), name="evide
 # Vercel Serverless Path Normalization Middleware
 @app.middleware("http")
 async def vercel_path_middleware(request, call_next):
+    query_str = request.scope.get("query_string", b"").decode("utf-8", errors="ignore")
+    if "__path=" in query_str:
+        import urllib.parse
+        parsed_qs = urllib.parse.parse_qs(query_str)
+        if "__path" in parsed_qs and parsed_qs["__path"]:
+            raw_target = parsed_qs.pop("__path")[0]
+            if "?" in raw_target:
+                p_part, q_part = raw_target.split("?", 1)
+            else:
+                p_part, q_part = raw_target, ""
+
+            while p_part.startswith("//"):
+                p_part = p_part[1:]
+            if not p_part.startswith("/"):
+                p_part = "/" + p_part
+
+            request.scope["path"] = p_part
+
+            reconstructed_q = []
+            if q_part:
+                reconstructed_q.append(q_part)
+            for k, vals in parsed_qs.items():
+                for v in vals:
+                    reconstructed_q.append(f"{urllib.parse.quote(k)}={urllib.parse.quote(v)}")
+            request.scope["query_string"] = "&".join(reconstructed_q).encode("utf-8")
+
     path = request.scope.get("path", "")
     if path in ["/api/index.py", "/api/index"]:
         request.scope["path"] = "/"
-    elif path.startswith("/api/index.py/"):
-        request.scope["path"] = path[len("/api/index.py"):]
-    elif path.startswith("/api/index/"):
-        request.scope["path"] = path[len("/api/index"):]
     elif path == "/api/docs":
         request.scope["path"] = "/docs"
     elif path == "/api/openapi.json":
         request.scope["path"] = "/openapi.json"
     return await call_next(request)
+
 
 
 # Include Routers (Both with /api prefix and without, for maximum compatibility with serverless rewrites)
@@ -130,16 +153,13 @@ from fastapi import Request
 @app.get("/api")
 @app.get("/api/")
 @app.get("/api/index.py")
-def root(request: Request):
+def root():
     return {
         "platform": settings.PROJECT_NAME,
         "version": settings.VERSION,
         "status": "OPERATIONAL",
         "demo_mode": settings.DEMO_MODE,
-        "docs_url": "/docs",
-        "debug_path": request.scope.get("path"),
-        "debug_raw_path": str(request.scope.get("raw_path")),
-        "debug_headers": dict(request.headers)
+        "docs_url": "/docs"
     }
 
 
