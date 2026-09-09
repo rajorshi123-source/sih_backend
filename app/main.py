@@ -66,20 +66,34 @@ app.add_middleware(
 # Static Files for Evidence Images
 app.mount("/evidence", StaticFiles(directory=settings.EVIDENCE_DIR), name="evidence")
 
-# Include Routers
-app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
-app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
-app.include_router(buses.router, prefix=settings.API_V1_PREFIX)
-app.include_router(routes.router, prefix=settings.API_V1_PREFIX)
-app.include_router(defects.router, prefix=settings.API_V1_PREFIX)
-app.include_router(traffic.router, prefix=settings.API_V1_PREFIX)
-app.include_router(incidents.router, prefix=settings.API_V1_PREFIX)
-app.include_router(alerts.router, prefix=settings.API_V1_PREFIX)
-app.include_router(video.router, prefix=settings.API_V1_PREFIX)
-app.include_router(analytics.router, prefix=settings.API_V1_PREFIX)
-app.include_router(reports.router, prefix=settings.API_V1_PREFIX)
-app.include_router(sys_settings.router, prefix=settings.API_V1_PREFIX)
-app.include_router(simulation.router, prefix=settings.API_V1_PREFIX)
+# Vercel Serverless Path Normalization Middleware
+@app.middleware("http")
+async def vercel_path_middleware(request, call_next):
+    path = request.scope.get("path", "")
+    if path in ["/api/index.py", "/api/index"]:
+        request.scope["path"] = "/"
+    elif path.startswith("/api/index.py/"):
+        request.scope["path"] = path[len("/api/index.py"):]
+    elif path.startswith("/api/index/"):
+        request.scope["path"] = path[len("/api/index"):]
+    elif path == "/api/docs":
+        request.scope["path"] = "/docs"
+    elif path == "/api/openapi.json":
+        request.scope["path"] = "/openapi.json"
+    return await call_next(request)
+
+
+# Include Routers (Both with /api prefix and without, for maximum compatibility with serverless rewrites)
+ALL_ROUTERS = [
+    auth.router, dashboard.router, buses.router, routes.router, defects.router,
+    traffic.router, incidents.router, alerts.router, video.router,
+    analytics.router, reports.router, sys_settings.router, simulation.router
+]
+
+for r in ALL_ROUTERS:
+    app.include_router(r, prefix=settings.API_V1_PREFIX)
+    app.include_router(r)
+
 
 # WebSocket Endpoints
 @app.websocket("/ws/fleet")
@@ -111,6 +125,9 @@ async def websocket_alerts_endpoint(websocket: WebSocket):
         ws_manager.disconnect_alerts(websocket)
 
 @app.get("/")
+@app.get("/api")
+@app.get("/api/")
+@app.get("/api/index.py")
 def root():
     return {
         "platform": settings.PROJECT_NAME,
