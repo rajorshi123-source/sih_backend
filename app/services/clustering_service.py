@@ -1,5 +1,6 @@
 import math
 import random
+import uuid
 from datetime import datetime
 from typing import Optional, Tuple
 from sqlalchemy.orm import Session
@@ -106,8 +107,7 @@ class DefectClusteringService:
         else:
             # Create a brand new defect cluster
             is_new_cluster = True
-            count = db.query(RoadDefectCluster).count() + 1
-            cluster_code = f"RD-{1000 + count}"
+            cluster_code = f"RD-{uuid.uuid4().hex[:8].upper()}"
 
             cluster = RoadDefectCluster(
                 cluster_code=cluster_code,
